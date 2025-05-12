@@ -7,6 +7,7 @@ import tempfile
 import shutil
 from pathlib import Path
 import io
+from prompt_generator import PromptGenerator
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -30,8 +31,10 @@ def upload_files():
         return 'No files uploaded', 400
     
     files = request.files.getlist('files')
-    if len(files) < 2:
-        return 'Please upload at least 2 files for comparison', 400
+    prompt = request.form.get('prompt', '')
+    
+    if len(files) < 1:
+        return 'Please upload at least one file for processing', 400
 
     filenames = []
     for file in files:
@@ -67,6 +70,10 @@ def upload_files():
                 # Add the training file
                 with open(training_file, 'rb') as f:
                     zf.writestr('training_data.xlsx', f.read())
+                
+                # Add the prompt to a text file
+                if prompt:
+                    zf.writestr('prompt.txt', prompt)
 
             # Clean up the individual Excel files
             os.remove(results_file)
@@ -91,6 +98,43 @@ def upload_files():
         import traceback
         print("Error details:", traceback.format_exc())
         return f"An error occurred: {str(e)}", 500
+
+@app.route('/generate-prompt', methods=['POST'])
+def generate_prompt():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    if not file.filename.endswith('.xlsx'):
+        return jsonify({'error': 'Only Excel files (.xlsx) are allowed'}), 400
+    
+    try:
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        
+        # Generate prompt
+        generator = PromptGenerator()
+        result = generator.process_file(filepath)
+        
+        # Clean up
+        os.remove(filepath)
+        
+        return jsonify({
+            'success': True,
+            'summary': result['summary'],
+            'generated_prompt': result['generated_prompt']
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/prompt-generator')
+def prompt_generator_page():
+    return render_template('prompt_generator.html')
 
 if __name__ == '__main__':
     app.run(debug=True) 
