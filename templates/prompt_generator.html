@@ -3,146 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Excel AI Assistant</title>
+    <title>HFT Excel Tool With AI - Assistant</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .prompt-input {
-            width: 100%;
-            min-height: 100px;
-            margin-top: 15px;
-            padding: 15px;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            font-size: 16px;
-        }
-        .response-area {
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 20px;
-            margin-top: 20px;
-            min-height: 100px;
-            white-space: pre-wrap;
-            font-family: 'Courier New', monospace;
-        }
-        .loading {
-            display: none;
-        }
-        #fileInfo {
-            margin-top: 15px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-        }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
 </head>
 <body>
-    <div class="container mt-5">
-        <h1 class="mb-4">Excel AI Assistant</h1>
+    <div class="container">
+        <h1 class="page-title">HFT Excel Assistant</h1>
         
-        <div class="card mb-4">
-            <div class="card-body">
-                <h5 class="card-title">Step 1: Upload Excel Files</h5>
-                <div class="mb-3">
-                    <input type="file" class="form-control" id="excelFiles" name="files" multiple accept=".xlsx" required>
-                </div>
-                <div id="fileInfo" style="display: none;">
-                    <h6>Selected Files:</h6>
-                    <ul id="fileList" class="mb-0"></ul>
-                </div>
+        <div class="tool-card mb-4">
+            <div class="tool-card-header">
+                <h5 class="m-0"><i class="fas fa-upload me-2"></i>Upload Excel Files</h5>
+            </div>
+            <div class="tool-card-body">
+                <form id="promptForm" action="/get-ai-response" method="post" enctype="multipart/form-data">
+                    <div class="dropzone">
+                        <input type="file" class="d-none" id="excelFiles" name="files" multiple accept=".xlsx" required>
+                        <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                        <p class="mb-1">Drag and drop your Excel files here</p>
+                        <p class="text-muted small">or click to browse</p>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <div class="tool-card">
+                            <div class="tool-card-header">
+                                <h5 class="m-0"><i class="fas fa-question-circle me-2"></i>Ask Your Question</h5>
+                            </div>
+                            <div class="tool-card-body">
+                                <textarea 
+                                    id="userPrompt" 
+                                    name="prompt" 
+                                    class="form-control" 
+                                    rows="4" 
+                                    placeholder="Ask any question about your Excel files..."
+                                    required></textarea>
+                                <button type="submit" class="btn btn-primary w-100 mt-3">
+                                    <i class="fas fa-robot me-2"></i>Get AI Response
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Step 2: Ask Anything About Your Excel Files</h5>
-                <textarea id="userPrompt" class="prompt-input" placeholder="Ask any question about your Excel files..."></textarea>
-                <div class="mt-3">
-                    <button class="btn btn-primary btn-lg" onclick="getAIResponse()">Get AI Response</button>
-                </div>
-            </div>
+        <div class="loading-spinner">
+            <div class="spinner"></div>
         </div>
 
-        <div class="loading mt-3">
-            <div class="d-flex justify-content-center">
-                <div class="spinner-border" role="status">
-                    <span class="visually-hidden">Loading...</span>
+        <div class="response-container" style="display: none;">
+            <div class="tool-card">
+                <div class="tool-card-header">
+                    <h5 class="m-0"><i class="fas fa-comment-dots me-2"></i>AI Response</h5>
+                </div>
+                <div class="tool-card-body">
+                    <div class="response-content"></div>
                 </div>
             </div>
-            <p class="text-center mt-2">Getting AI response...</p>
-        </div>
-
-        <div id="responseContainer" style="display: none;">
-            <h3 class="mt-4">AI Response</h3>
-            <div id="aiResponse" class="response-area"></div>
         </div>
     </div>
 
-    <script>
-        // Show selected files
-        document.getElementById('excelFiles').addEventListener('change', function(e) {
-            const fileInfo = document.getElementById('fileInfo');
-            const fileList = document.getElementById('fileList');
-            fileList.innerHTML = '';
-            
-            if (this.files.length > 0) {
-                for (let file of this.files) {
-                    const li = document.createElement('li');
-                    li.textContent = file.name;
-                    fileList.appendChild(li);
-                }
-                fileInfo.style.display = 'block';
-            } else {
-                fileInfo.style.display = 'none';
-            }
-        });
-
-        async function getAIResponse() {
-            const fileInput = document.getElementById('excelFiles');
-            const userPrompt = document.getElementById('userPrompt').value.trim();
-            const loading = document.querySelector('.loading');
-            const responseContainer = document.getElementById('responseContainer');
-            
-            if (fileInput.files.length === 0) {
-                alert('Please select at least one Excel file');
-                return;
-            }
-
-            if (!userPrompt) {
-                alert('Please write your question or prompt');
-                return;
-            }
-
-            const formData = new FormData();
-            for (let file of fileInput.files) {
-                formData.append('files', file);
-            }
-            formData.append('prompt', userPrompt);
-
-            try {
-                loading.style.display = 'block';
-                responseContainer.style.display = 'none';
-
-                const response = await fetch('/get-ai-response', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    document.getElementById('aiResponse').textContent = data.response;
-                    responseContainer.style.display = 'block';
-                } else {
-                    const errorData = await response.text();
-                    throw new Error(errorData);
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            } finally {
-                loading.style.display = 'none';
-            }
-        }
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html> 

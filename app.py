@@ -1,5 +1,5 @@
 import os
-from flask import Flask, request, render_template, send_file, jsonify
+from flask import Flask, request, render_template, send_file, jsonify, url_for
 from werkzeug.utils import secure_filename
 from excel_comparator import ExcelComparator
 import zipfile
@@ -15,7 +15,7 @@ import httpx
 
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
@@ -26,8 +26,10 @@ client = OpenAI(
     http_client=http_client
 )
 
-# Ensure upload directory exists
+# Ensure directories exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs('static/css', exist_ok=True)
+os.makedirs('static/js', exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 
