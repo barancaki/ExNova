@@ -8,10 +8,23 @@ import shutil
 from pathlib import Path
 import io
 from prompt_generator import PromptGenerator
+from openai import OpenAI
+import pandas as pd
+from dotenv import load_dotenv
+import httpx
+
+load_dotenv()
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+# Initialize OpenAI client with custom httpx client
+http_client = httpx.Client()
+client = OpenAI(
+    api_key=os.getenv('OPENAI_API_KEY'),
+    http_client=http_client
+)
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -21,9 +34,77 @@ ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/', methods=['GET'])
+@app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/prompt-writer')
+def prompt_writer():
+    return render_template('prompt_generator.html')
+
+@app.route('/get-ai-response', methods=['POST'])
+def get_ai_response():
+    if 'files' not in request.files:
+        return jsonify({'error': 'No files provided'}), 400
+    
+    files = request.files.getlist('files')
+    prompt = request.form.get('prompt', '')
+    
+    if not prompt:
+        return jsonify({'error': 'No prompt provided'}), 400
+
+    if len(files) < 1:
+        return jsonify({'error': 'Please upload at least one file'}), 400
+
+    try:
+        # Process each Excel file and create context
+        excel_contexts = []
+        for file in files:
+            if file and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                
+                # Read Excel file
+                df = pd.read_excel(filepath)
+                
+                # Create context for this file
+                context = f"File: {filename}\n"
+                context += f"Columns: {', '.join(df.columns.tolist())}\n"
+                context += f"Total Rows: {len(df)}\n"
+                context += f"Sample Data (first 5 rows):\n{df.head().to_string()}\n\n"
+                
+                excel_contexts.append(context)
+                
+                # Clean up
+                os.remove(filepath)
+
+        if not excel_contexts:
+            return jsonify({'error': 'No valid Excel files processed'}), 400
+
+        # Combine all contexts
+        full_context = "Excel Files Analysis:\n\n" + "\n".join(excel_contexts)
+
+        # Get response from OpenAI using GPT-3.5-turbo
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are an AI assistant specialized in analyzing Excel data. Provide clear, concise answers about the Excel files."},
+                {"role": "user", "content": f"Context about the Excel files:\n\n{full_context}\n\nUser Question: {prompt}"}
+            ],
+            temperature=0.7,
+            max_tokens=1000
+        )
+
+        # Return the AI response
+        return jsonify({
+            'response': response.choices[0].message.content
+        })
+
+    except Exception as e:
+        import traceback
+        print("Error details:", traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
