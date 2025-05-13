@@ -1,139 +1,127 @@
-# Excel AI Comparison Tool
+# Excel AI Tool
 
-A powerful web-based tool that combines Excel file analysis with AI capabilities. This application provides advanced file comparison features and AI-powered prompt generation for Excel data analysis.
+A powerful Flask-based web application that provides advanced Excel file processing capabilities with AI integration.
 
-## Main Features
+## Features
 
-### Excel Comparison
-- Upload and compare multiple Excel files simultaneously
-- AI-powered similarity analysis using TF-IDF and cosine similarity
-- Structural and content-based comparison
-- Detailed matching analysis with row-level comparisons
-- Support for multiple Excel file formats (.xlsx, .xls)
+### 1. Excel Comparator
+- Compare multiple Excel files simultaneously
+- Generate detailed analysis reports
+- Optimized for large files (up to 100MB)
+- Chunked file reading and parallel processing
+- Memory-efficient processing with garbage collection
+- Automated report generation in ZIP format
 
-### AI Features
-- AI-powered prompt generation for Excel analysis
-- Intelligent data summarization
-- GPT-3.5 Turbo integration for custom data analysis
-- Context-aware responses based on Excel content
+### 2. Matching Data Finder
+- Find matching rows across multiple Excel files
+- Target specific columns for comparison
+- Adjustable similarity threshold (1-100%)
+- Support for both exact and fuzzy matching
+- Column preview functionality
+- Detailed matching reports with summary sheets
+- Interactive column selection interface
 
-### User Interface
-- Modern web-based interface
-- Drag-and-drop file upload
-- Real-time processing feedback
-- Downloadable ZIP results
-- Separate prompt generator interface
+### 3. Excel Prompt Writer
+- AI-powered Excel file analysis
+- Generate intelligent insights and summaries
+- Custom prompt generation based on file content
+- Integration with OpenAI's GPT-3.5 Turbo
+- Context-aware responses
 
-## Output Files
+## Setup
 
-### ZIP Package Contents
-1. **comparison_results.xlsx**
-   - Overall Comparisons Sheet (similarity scores)
-   - Matching Content Sheet (detailed matches)
-   - Summary Sheet (analysis overview)
-   - Similarity metrics (structural, content, overall percentage)
+1. Clone the repository:
+```bash
+git clone [repository-url]
+cd excel-ai-tool
+```
 
-2. **training_data.xlsx**
-   - File Information Sheet (metadata)
-   - Individual Data Sheets (per file)
-   - Column Analysis Sheet (cross-file analysis)
+2. Create and activate a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
 
-3. **prompt.txt** (if prompt was provided)
-   - Contains the analysis prompt used
-
-## Installation
-
-### Prerequisites
-- Python 3.8 or higher
-- pip package manager
-
-### Setup Steps
-1. Clone the repository
-2. Create and activate a virtual environment (recommended):
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
 3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Set up environment variables:
-   - Create a `.env` file
-   - Add your OpenAI API key: `OPENAI_API_KEY=your_key_here`
+```bash
+pip install -r requirements.txt
+```
 
-### Running the Application
+4. Set up environment variables:
+Create a `.env` file in the root directory with:
+```
+OPENAI_API_KEY=your_api_key_here
+```
+
+5. Run the application:
 ```bash
 python app.py
 ```
-Access the application at `http://localhost:5000`
 
-## Usage Guide
+The application will be available at `http://localhost:5000`
 
-### Excel Comparison
-1. Navigate to the home page
-2. Upload two or more Excel files using drag-and-drop
-3. (Optional) Add an analysis prompt
-4. Click "Compare Files"
-5. Download and extract the results ZIP file
+## Usage
 
-### Prompt Generation
-1. Go to the Prompt Generator page
-2. Upload a single Excel file
-3. Receive AI-generated analysis prompts
-4. View file summary and suggested prompts
+### Excel Comparator
+1. Navigate to the Excel Comparator section
+2. Upload multiple Excel files (up to 100MB each)
+3. Click "Compare Files"
+4. Download the ZIP file containing comparison results
+
+### Matching Data Finder
+1. Go to the Matching Data Finder section
+2. Upload two or more Excel files
+3. Enter the column names you want to match
+4. Use the column preview button to see available columns
+5. Adjust the similarity threshold as needed
+6. Click "Find Matching Data"
+7. Download the ZIP file with matching results
+
+### Excel Prompt Writer
+1. Access the Prompt Writer section
+2. Upload an Excel file
+3. Enter your question or analysis request
+4. Receive AI-generated insights and analysis
 
 ## Technical Details
 
-### Core Technologies
-- **Flask**: Web framework
-- **Pandas**: Excel processing
-- **Scikit-learn**: ML algorithms
-- **OpenAI GPT-3.5**: AI analysis
-- **Python-Levenshtein**: String comparisons
+- Built with Flask
+- Uses pandas for Excel processing
+- Implements Levenshtein distance for fuzzy matching
+- OpenAI GPT-3.5 Turbo integration
+- Optimized for performance with large files
+- Memory-efficient processing
+- Parallel processing capabilities
+- Error handling and logging
 
-### Analysis Methods
-- TF-IDF vectorization
-- Cosine similarity metrics
-- Levenshtein distance
-- Custom Excel-specific algorithms
+## Requirements
 
-## Limitations and Constraints
+- Python 3.7+
+- Flask
+- pandas
+- openpyxl
+- python-Levenshtein
+- openai
+- python-dotenv
+- httpx
 
-### File Restrictions
-- Maximum file size: 16MB per file
-- Supported formats: .xlsx, .xls
-- Minimum files for comparison: 2
-- Maximum files: No hard limit (performance-dependent)
+## Error Handling
 
-### API Limits
-- OpenAI API rate limits apply
-- Token limits for GPT-3.5 Turbo responses
+The application includes comprehensive error handling for:
+- File size limits
+- Invalid file formats
+- Processing errors
+- API timeouts
+- Memory constraints
 
-## Security and Error Handling
+## Security
 
-### Security Features
-- Secure filename handling
-- Temporary file cleanup
-- Input validation and sanitization
+- Secure file handling
 - Environment variable protection
-
-### Error Management
-- Detailed error messages
-- Graceful failure handling
+- No file storage on server
 - Automatic cleanup of temporary files
-- Invalid format detection
+- Protected API key handling
 
-## Support and Troubleshooting
+## Contributing
 
-### Common Issues
-- File size exceeded
-- Unsupported file format
-- API key configuration
-- Memory limitations
-
-### Best Practices
-- Use clean, well-formatted Excel files
-- Keep file sizes reasonable
-- Ensure proper column headers
-- Back up original files before processing
+Contributions are welcome! Please feel free to submit a Pull Request.
