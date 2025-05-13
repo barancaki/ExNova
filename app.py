@@ -17,10 +17,10 @@ load_dotenv()
 
 app = Flask(__name__, static_folder='static')
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # Increased to 100MB max file size
 
-# Initialize OpenAI client with custom httpx client
-http_client = httpx.Client()
+# Initialize OpenAI client with custom httpx client with increased timeout
+http_client = httpx.Client(timeout=60.0)  # Increased timeout to 60 seconds
 client = OpenAI(
     api_key=os.getenv('OPENAI_API_KEY'),
     http_client=http_client
@@ -111,46 +111,73 @@ def get_ai_response():
 @app.route('/upload', methods=['POST'])
 def upload_files():
     if 'files' not in request.files:
-        return 'No files uploaded', 400
+        return jsonify({'error': 'No files uploaded'}), 400
     
     files = request.files.getlist('files')
     prompt = request.form.get('prompt', '')
     
     if len(files) < 1:
-        return 'Please upload at least one file for processing', 400
+        return jsonify({'error': 'Please upload at least one file for processing'}), 400
 
+    print(f"Processing {len(files)} files...")
     filenames = []
+    total_size = 0
+    
     for file in files:
         if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-            filenames.append(filepath)
+            try:
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                size = os.path.getsize(filepath)
+                total_size += size
+                print(f"Saved file: {filename}, Size: {size / (1024*1024):.2f} MB")
+                filenames.append(filepath)
+            except Exception as e:
+                print(f"Error saving file {file.filename}: {str(e)}")
+                # Clean up any files that were saved
+                for saved_file in filenames:
+                    try:
+                        os.remove(saved_file)
+                    except:
+                        pass
+                return jsonify({'error': f'Error saving file {file.filename}: {str(e)}'}), 500
 
     if not filenames:
-        return 'No valid Excel files uploaded', 400
+        return jsonify({'error': 'No valid Excel files uploaded'}), 400
+
+    print(f"Total size of all files: {total_size / (1024*1024):.2f} MB")
 
     try:
-        # Initialize comparator and process files
-        comparator = ExcelComparator()
+        # Initialize comparator with adjusted chunk size based on available memory
+        chunk_size = min(1000, max(100, int(1000 * (16 * 1024 * 1024) / total_size)))  # Adjust chunk size based on total file size
+        print(f"Using chunk size: {chunk_size}")
+        comparator = ExcelComparator(chunk_size=chunk_size)
+        
+        print("Starting file comparison...")
         results_file, training_file = comparator.compare_files(filenames)
+        print("File comparison completed")
         
         # Clean up uploaded files
+        print("Cleaning up uploaded files...")
         for filepath in filenames:
             try:
                 os.remove(filepath)
-            except:
-                pass
+            except Exception as e:
+                print(f"Error removing file {filepath}: {str(e)}")
 
         try:
-            # Create ZIP file in memory
+            print("Creating ZIP file...")
+            # Create ZIP file in memory with progress tracking
             memory_file = io.BytesIO()
             with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
                 # Add the results file
+                print("Adding results file to ZIP...")
                 with open(results_file, 'rb') as f:
                     zf.writestr('comparison_results.xlsx', f.read())
                 
                 # Add the training file
+                print("Adding training file to ZIP...")
                 with open(training_file, 'rb') as f:
                     zf.writestr('training_data.xlsx', f.read())
                 
@@ -158,29 +185,43 @@ def upload_files():
                 if prompt:
                     zf.writestr('prompt.txt', prompt)
 
+            print("Cleaning up temporary files...")
             # Clean up the individual Excel files
-            os.remove(results_file)
-            os.remove(training_file)
+            try:
+                os.remove(results_file)
+                os.remove(training_file)
+            except Exception as e:
+                print(f"Error removing temporary files: {str(e)}")
 
             # Seek to the beginning of the memory file
             memory_file.seek(0)
-
-            return send_file(
+            
+            print("Sending ZIP file...")
+            response = send_file(
                 memory_file,
                 mimetype='application/zip',
                 as_attachment=True,
                 download_name='excel_analysis_results.zip'
             )
+            
+            # Set response headers to prevent caching
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+            
+            return response
 
         except Exception as e:
             print(f"Error creating ZIP: {str(e)}")
-            raise
+            import traceback
+            print("ZIP creation error details:", traceback.format_exc())
+            return jsonify({'error': f'Error creating ZIP file: {str(e)}'}), 500
 
     except Exception as e:
         # Print the full error for debugging
         import traceback
         print("Error details:", traceback.format_exc())
-        return f"An error occurred: {str(e)}", 500
+        return jsonify({'error': f'An error occurred during processing: {str(e)}'}), 500
 
 @app.route('/generate-prompt', methods=['POST'])
 def generate_prompt():
