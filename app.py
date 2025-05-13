@@ -2,6 +2,7 @@ import os
 from flask import Flask, request, render_template, send_file, jsonify, url_for
 from werkzeug.utils import secure_filename
 from excel_comparator import ExcelComparator
+from data_matcher import DataMatcher
 import zipfile
 import tempfile
 import shutil
@@ -259,6 +260,130 @@ def generate_prompt():
 @app.route('/prompt-generator')
 def prompt_generator_page():
     return render_template('prompt_generator.html')
+
+@app.route('/get-columns', methods=['POST'])
+def get_columns():
+    if 'files' not in request.files:
+        return jsonify({'error': 'No files uploaded'}), 400
+    
+    files = request.files.getlist('files')
+    if len(files) < 1:
+        return jsonify({'error': 'No files uploaded'}), 400
+
+    columns_by_file = {}
+    
+    for file in files:
+        if file and allowed_file(file.filename):
+            try:
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                
+                # Read Excel file and get columns
+                df = pd.read_excel(filepath)
+                columns_by_file[filename] = df.columns.tolist()
+                
+                # Clean up
+                os.remove(filepath)
+                
+            except Exception as e:
+                print(f"Error processing file {file.filename}: {str(e)}")
+                return jsonify({'error': f'Error processing file {file.filename}'}), 500
+    
+    return jsonify({'columns': columns_by_file})
+
+@app.route('/find-matches', methods=['POST'])
+def find_matches():
+    if 'files' not in request.files:
+        return jsonify({'error': 'No files uploaded'}), 400
+    
+    files = request.files.getlist('files')
+    similarity_threshold = float(request.form.get('similarity_threshold', 70))
+    column_names = request.form.get('column_names', '').strip()
+    
+    if not column_names:
+        return jsonify({'error': 'Please specify columns to match'}), 400
+    
+    if len(files) < 2:
+        return jsonify({'error': 'Please upload at least two files for matching'}), 400
+
+    print(f"Processing {len(files)} files for matching with threshold {similarity_threshold}%")
+    print(f"Columns to match: {column_names}")
+    
+    filenames = []
+    columns_to_match = [col.strip() for col in column_names.split(',') if col.strip()]
+    
+    for file in files:
+        if file and allowed_file(file.filename):
+            try:
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                filenames.append(filepath)
+            except Exception as e:
+                print(f"Error saving file {file.filename}: {str(e)}")
+                # Clean up any files that were saved
+                for saved_file in filenames:
+                    try:
+                        os.remove(saved_file)
+                    except:
+                        pass
+                return jsonify({'error': f'Error saving file {file.filename}: {str(e)}'}), 500
+
+    if not filenames:
+        return jsonify({'error': 'No valid Excel files uploaded'}), 400
+
+    try:
+        # Initialize matcher and process files
+        matcher = DataMatcher(similarity_threshold=similarity_threshold)
+        result_file = matcher.find_matches(filenames, columns_to_match)
+        
+        # Clean up uploaded files
+        for filepath in filenames:
+            try:
+                os.remove(filepath)
+            except Exception as e:
+                print(f"Error removing file {filepath}: {str(e)}")
+
+        try:
+            # Create ZIP file in memory
+            memory_file = io.BytesIO()
+            with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+                # Add the results file
+                with open(result_file, 'rb') as f:
+                    zf.writestr('matching_data_results.xlsx', f.read())
+
+            # Clean up the results file
+            os.remove(result_file)
+
+            # Seek to the beginning of the memory file
+            memory_file.seek(0)
+            
+            response = send_file(
+                memory_file,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name='matching_data_results.zip'
+            )
+            
+            # Set response headers to prevent caching
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+            
+            return response
+
+        except Exception as e:
+            print(f"Error creating ZIP: {str(e)}")
+            import traceback
+            print("ZIP creation error details:", traceback.format_exc())
+            return jsonify({'error': f'Error creating ZIP file: {str(e)}'}), 500
+
+    except Exception as e:
+        # Print the full error for debugging
+        import traceback
+        print("Error details:", traceback.format_exc())
+        return jsonify({'error': f'An error occurred during processing: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True) 

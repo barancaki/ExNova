@@ -2,6 +2,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeDropzones();
     initializeFileUploads();
     initializePromptSubmission();
+    initializeSimilaritySlider();
+    initializeColumnPreview();
 });
 
 function initializeDropzones() {
@@ -137,4 +139,94 @@ function showError(message) {
     setTimeout(() => {
         errorDiv.remove();
     }, 5000);
+}
+
+function initializeSimilaritySlider() {
+    const slider = document.getElementById('similarityThreshold');
+    const valueDisplay = document.getElementById('thresholdValue');
+    
+    if (slider && valueDisplay) {
+        // Update the value display when the slider moves
+        slider.addEventListener('input', (e) => {
+            valueDisplay.textContent = `${e.target.value}%`;
+        });
+    }
+}
+
+function initializeColumnPreview() {
+    const showColumnsBtn = document.getElementById('showColumnsBtn');
+    const columnsPreview = document.getElementById('columnsPreview');
+    const availableColumns = document.getElementById('availableColumns');
+    const fileInput = document.getElementById('matchingFiles');
+    const columnInput = document.getElementById('columnNames');
+
+    if (!showColumnsBtn || !columnsPreview || !availableColumns || !fileInput) return;
+
+    showColumnsBtn.addEventListener('click', async () => {
+        if (!fileInput.files || fileInput.files.length === 0) {
+            showError('Please upload Excel files first');
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            for (let file of fileInput.files) {
+                formData.append('files', file);
+            }
+
+            const response = await fetch('/get-columns', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to get columns');
+            }
+
+            const data = await response.json();
+            
+            // Display columns from all files
+            availableColumns.innerHTML = '';
+            Object.entries(data.columns).forEach(([filename, columns]) => {
+                const fileDiv = document.createElement('div');
+                fileDiv.className = 'mb-2';
+                fileDiv.innerHTML = `
+                    <strong class="d-block mb-1">${filename}:</strong>
+                    <div class="column-chips">
+                        ${columns.map(col => `
+                            <span class="badge bg-light text-dark me-1 mb-1 column-chip" 
+                                  style="cursor: pointer;" 
+                                  data-column="${col}">
+                                ${col}
+                            </span>
+                        `).join('')}
+                    </div>
+                `;
+                availableColumns.appendChild(fileDiv);
+            });
+
+            // Show the columns preview
+            columnsPreview.classList.remove('d-none');
+
+            // Add click handlers for column chips
+            document.querySelectorAll('.column-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    const column = chip.dataset.column;
+                    const currentColumns = columnInput.value
+                        .split(',')
+                        .map(c => c.trim())
+                        .filter(c => c);
+                    
+                    if (!currentColumns.includes(column)) {
+                        currentColumns.push(column);
+                        columnInput.value = currentColumns.join(', ');
+                    }
+                });
+            });
+
+        } catch (error) {
+            console.error('Error:', error);
+            showError('Failed to get columns from Excel files');
+        }
+    });
 } 

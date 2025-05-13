@@ -14,7 +14,7 @@
         <h1 class="page-title">HFT Excel Tool With AI</h1>
         
         <div class="row g-4">
-            <div class="col-md-6">
+            <div class="col-md-4 mb-4">
                 <div class="tool-card">
                     <div class="tool-card-header">
                         <h5 class="m-0"><i class="fas fa-file-excel me-2"></i>Excel Comparator</h5>
@@ -36,10 +36,67 @@
                 </div>
             </div>
             
-            <div class="col-md-6">
+            <div class="col-md-4 mb-4">
                 <div class="tool-card">
                     <div class="tool-card-header">
-                        <h5 class="m-0"><i class="fas fa-magic me-2"></i>Excel Prompt Writer</h5>
+                        <h5 class="m-0"><i class="fas fa-magic me-2"></i>Matching Data Finder</h5>
+                    </div>
+                    <div class="tool-card-body">
+                        <p class="card-text">Find matching rows by comparing specific columns across Excel files.</p>
+                        <form id="matchingDataForm" action="/find-matches" method="post" enctype="multipart/form-data">
+                            <div class="dropzone mb-3">
+                                <input type="file" class="d-none" id="matchingFiles" name="files" multiple accept=".xlsx,.xls" required>
+                                <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                                <p class="mb-1">Drag and drop your Excel files here</p>
+                                <p class="text-muted small">or click to browse</p>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label for="columnNames" class="form-label">Columns to Match</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="columnNames" name="column_names" 
+                                           placeholder="Enter column names (comma-separated)">
+                                    <button type="button" class="btn btn-outline-secondary" id="showColumnsBtn">
+                                        <i class="fas fa-table"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">Example: Name, Email, Phone</small>
+                            </div>
+
+                            <div id="columnsPreview" class="mb-3 d-none">
+                                <div class="card">
+                                    <div class="card-header bg-light">
+                                        Available Columns
+                                    </div>
+                                    <div class="card-body" id="availableColumns">
+                                        <!-- Columns will be displayed here -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label for="similarityThreshold" class="form-label">Similarity Threshold (%)</label>
+                                <input type="range" class="form-range" id="similarityThreshold" name="similarity_threshold" 
+                                       min="1" max="100" value="70">
+                                <div class="d-flex justify-content-between">
+                                    <small>1%</small>
+                                    <small id="thresholdValue">70%</small>
+                                    <small>100%</small>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-search me-2"></i>Find Matching Data
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4 mb-4">
+                <div class="tool-card">
+                    <div class="tool-card-header">
+                        <h5 class="m-0"><i class="fas fa-wand-magic-sparkles me-2"></i>Excel Prompt Writer</h5>
                     </div>
                     <div class="tool-card-body">
                         <p class="card-text">Generate intelligent prompts and analyze your Excel files using advanced AI capabilities.</p>
