@@ -137,9 +137,3 @@ Access the application at `http://localhost:5000`
 - Keep file sizes reasonable
 - Ensure proper column headers
 - Back up original files before processing
-
-## License
-[Your License Information Here]
-
-## Contributing
-[Your Contribution Guidelines Here] 
