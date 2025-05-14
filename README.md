@@ -1,6 +1,6 @@
 # Excel AI Tool
 
-A powerful Flask-based web application that provides advanced Excel file processing capabilities with AI integration.
+A powerful Flask-based web application that provides advanced Excel file processing capabilities with AI integration using Google's Gemini Pro model.
 
 ## Features
 
@@ -21,12 +21,22 @@ A powerful Flask-based web application that provides advanced Excel file process
 - Detailed matching reports with summary sheets
 - Interactive column selection interface
 
-### 3. Excel Prompt Writer
-- AI-powered Excel file analysis
+### 3. Excel Prompt Writer with AI
+- AI-powered Excel file analysis using Google's Gemini Pro
 - Generate intelligent insights and summaries
 - Custom prompt generation based on file content
-- Integration with OpenAI's GPT-3.5 Turbo
+- Smart rate limiting and retry logic
 - Context-aware responses
+- Automatic handling of API quotas
+- Exponential backoff for API requests
+
+## Smart API Management
+- Automatic rate limiting (1 request per second minimum)
+- Exponential backoff retry logic
+- Graceful handling of API quota limits
+- Smart request queuing
+- Automatic error recovery
+- Detailed error logging
 
 ## Setup
 
@@ -50,7 +60,7 @@ pip install -r requirements.txt
 4. Set up environment variables:
 Create a `.env` file in the root directory with:
 ```
-OPENAI_API_KEY=your_api_key_here
+GOOGLE_API_KEY=your_api_key_here
 ```
 
 5. Run the application:
@@ -82,37 +92,65 @@ The application will be available at `http://localhost:5000`
 2. Upload an Excel file
 3. Enter your question or analysis request
 4. Receive AI-generated insights and analysis
+   - The system automatically handles rate limits
+   - Retries are automatic if API limits are reached
+   - Responses are optimized for clarity and relevance
 
 ## Technical Details
 
+### Core Technologies
 - Built with Flask
 - Uses pandas for Excel processing
 - Implements Levenshtein distance for fuzzy matching
-- OpenAI GPT-3.5 Turbo integration
-- Optimized for performance with large files
+- Google Gemini Pro AI integration
+- Tenacity for robust retry handling
+- Rate limiting and request management
+
+### Performance Features
+- Optimized for large files
 - Memory-efficient processing
 - Parallel processing capabilities
-- Error handling and logging
+- Chunked file reading
+- Automatic garbage collection
+- Smart request queuing
+
+### API Management
+- Automatic rate limiting
+- Exponential backoff retry logic
+- Smart error handling
+- Request queuing
+- Quota management
+- Detailed error logging
 
 ## Requirements
 
+### Python and Core Dependencies
 - Python 3.7+
-- Flask
-- pandas
-- openpyxl
-- python-Levenshtein
-- openai
-- python-dotenv
-- httpx
+- Flask==3.0.0
+- pandas==2.1.4
+- numpy==1.26.2
+- scikit-learn==1.3.2
+
+### Excel Processing
+- openpyxl==3.1.2
+- python-Levenshtein==0.23.0
+
+### AI and API Integration
+- google-generativeai==0.3.2
+- python-dotenv==1.0.0
+- httpx>=0.24.1,<1.0.0
+- tenacity==8.2.3
 
 ## Error Handling
 
 The application includes comprehensive error handling for:
+- API rate limits and quotas
 - File size limits
 - Invalid file formats
 - Processing errors
-- API timeouts
+- Network timeouts
 - Memory constraints
+- API authentication issues
 
 ## Security
 
@@ -121,7 +159,39 @@ The application includes comprehensive error handling for:
 - No file storage on server
 - Automatic cleanup of temporary files
 - Protected API key handling
+- Rate limit protection
+
+## Troubleshooting
+
+### API Rate Limits
+The application automatically handles rate limits by:
+1. Implementing minimum delays between requests
+2. Using exponential backoff for retries
+3. Providing clear error messages
+4. Logging detailed error information
+
+### Common Issues
+1. API Key Issues:
+   - Ensure your GOOGLE_API_KEY is correctly set in .env
+   - Verify API key has necessary permissions
+   - Check quota limits in Google Cloud Console
+
+2. File Processing:
+   - Ensure files are valid Excel format
+   - Check file size limits
+   - Verify file permissions
+
+3. Performance:
+   - Monitor memory usage for large files
+   - Check system resources
+   - Review log files for bottlenecks
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please feel free to submit a Pull Request. When contributing, please:
+
+1. Follow the existing code style
+2. Add tests for new features
+3. Update documentation as needed
+4. Ensure all tests pass
+5. Consider performance implications
