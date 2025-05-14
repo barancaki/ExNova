@@ -1,14 +1,41 @@
 import os
 import pandas as pd
-from openai import OpenAI
+import google.generativeai as genai
 from dotenv import load_dotenv
+import time
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 load_dotenv()
 
 class PromptGenerator:
     def __init__(self):
-        # Initialize OpenAI client
-        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        # Initialize Gemini
+        genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+        # Use the most capable model
+        self.model = genai.GenerativeModel('gemini-pro')
+        self.last_request_time = 0
+        self.min_request_interval = 1.0  # Minimum 1 second between requests
+        
+    def _wait_for_rate_limit(self):
+        """Ensure we don't exceed rate limits by waiting between requests."""
+        current_time = time.time()
+        time_since_last_request = current_time - self.last_request_time
+        if time_since_last_request < self.min_request_interval:
+            time.sleep(self.min_request_interval - time_since_last_request)
+        self.last_request_time = time.time()
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+    def _generate_with_retry(self, prompt):
+        """Generate content with retry logic."""
+        self._wait_for_rate_limit()
+        try:
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            if "RATE_LIMIT_EXCEEDED" in str(e):
+                print("Rate limit exceeded, retrying after backoff...")
+                raise  # This will trigger the retry
+            raise  # Re-raise other exceptions
         
     def analyze_excel(self, file_path):
         """Analyze an Excel file and extract key information."""
@@ -50,18 +77,9 @@ class PromptGenerator:
             - Data Types: {excel_summary['data_types']}
             """
             
-            # Generate the prompt using OpenAI
-            response = self.client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": system_message},
-                    {"role": "user", "content": f"Based on this Excel file structure, generate a detailed prompt:\n{context}"}
-                ],
-                temperature=0.7,
-                max_tokens=500
-            )
-            
-            return response.choices[0].message.content
+            # Generate the prompt using Gemini with retry logic
+            prompt = f"{system_message}\n\nBased on this Excel file structure, generate a detailed prompt:\n{context}"
+            return self._generate_with_retry(prompt)
         
         except Exception as e:
             raise Exception(f"Error generating prompt: {str(e)}")

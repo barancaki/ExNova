@@ -9,10 +9,12 @@ import shutil
 from pathlib import Path
 import io
 from prompt_generator import PromptGenerator
-from openai import OpenAI
+import google.generativeai as genai
 import pandas as pd
 from dotenv import load_dotenv
 import httpx
+import time
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 load_dotenv()
 
@@ -20,12 +22,13 @@ app = Flask(__name__, static_folder='static')
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # Increased to 100MB max file size
 
-# Initialize OpenAI client with custom httpx client with increased timeout
-http_client = httpx.Client(timeout=60.0)  # Increased timeout to 60 seconds
-client = OpenAI(
-    api_key=os.getenv('OPENAI_API_KEY'),
-    http_client=http_client
-)
+# Initialize Gemini
+genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+model = genai.GenerativeModel('gemini-pro')
+
+# Rate limiting variables
+last_request_time = 0
+min_request_interval = 1.0  # Minimum 1 second between requests
 
 # Ensure directories exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -33,6 +36,28 @@ os.makedirs('static/css', exist_ok=True)
 os.makedirs('static/js', exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
+
+def wait_for_rate_limit():
+    """Ensure we don't exceed rate limits by waiting between requests."""
+    global last_request_time
+    current_time = time.time()
+    time_since_last_request = current_time - last_request_time
+    if time_since_last_request < min_request_interval:
+        time.sleep(min_request_interval - time_since_last_request)
+    last_request_time = time.time()
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+def generate_with_retry(prompt):
+    """Generate content with retry logic."""
+    wait_for_rate_limit()
+    try:
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        if "RATE_LIMIT_EXCEEDED" in str(e):
+            print("Rate limit exceeded, retrying after backoff...")
+            raise  # This will trigger the retry
+        raise  # Re-raise other exceptions
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -88,20 +113,15 @@ def get_ai_response():
         # Combine all contexts
         full_context = "Excel Files Analysis:\n\n" + "\n".join(excel_contexts)
 
-        # Get response from OpenAI using GPT-3.5-turbo
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are an AI assistant specialized in analyzing Excel data. Provide clear, concise answers about the Excel files."},
-                {"role": "user", "content": f"Context about the Excel files:\n\n{full_context}\n\nUser Question: {prompt}"}
-            ],
-            temperature=0.7,
-            max_tokens=1000
-        )
+        # Get response from Gemini with retry logic
+        system_prompt = "You are an AI assistant specialized in analyzing Excel data. Provide clear, concise answers about the Excel files."
+        full_prompt = f"{system_prompt}\n\nContext about the Excel files:\n\n{full_context}\n\nUser Question: {prompt}"
+        
+        response_text = generate_with_retry(full_prompt)
 
         # Return the AI response
         return jsonify({
-            'response': response.choices[0].message.content
+            'response': response_text
         })
 
     except Exception as e:
