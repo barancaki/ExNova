@@ -94,16 +94,24 @@ class DataMatcher:
                 try:
                     print(f"Comparing with column '{col2}'")
                     
-                    # Clean values for comparison
+                    # Clean values for comparison and filter out empty/whitespace values
                     df1_clean = df1.copy()
                     df2_clean = df2.copy()
                     df1_clean[col1] = df1_clean[col1].apply(self._clean_value)
                     df2_clean[col2] = df2_clean[col2].apply(self._clean_value)
                     
+                    # Filter out rows where the matching columns contain only whitespace or empty values
+                    df1_clean = df1_clean[df1_clean[col1].str.strip() != '']
+                    df2_clean = df2_clean[df2_clean[col2].str.strip() != '']
+                    
+                    if df1_clean.empty or df2_clean.empty:
+                        print(f"No valid data to compare after filtering empty values in columns {col1} and {col2}")
+                        continue
+                    
                     # Find exact matches
                     merged = pd.merge(
-                        df1,
-                        df2,
+                        df1_clean,
+                        df2_clean,
                         left_on=col1,
                         right_on=col2,
                         suffixes=('_file1', '_file2'),
@@ -119,8 +127,8 @@ class DataMatcher:
                     
                     # Find fuzzy matches
                     if self.similarity_threshold < 1.0:  # Only if not requiring exact matches
-                        left_only = df1[~df1[col1].isin(df2[col2])]
-                        right_only = df2[~df2[col2].isin(df1[col1])]
+                        left_only = df1_clean[~df1_clean[col1].isin(df2_clean[col2])]
+                        right_only = df2_clean[~df2_clean[col2].isin(df1_clean[col1])]
                         
                         fuzzy_matches = []
                         for idx1, row1 in left_only.iterrows():
