@@ -6,6 +6,7 @@ from Levenshtein import ratio
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 import gc
+import zipfile
 
 class DataMatcher:
     def __init__(self, similarity_threshold: float = 0.7):
@@ -184,6 +185,44 @@ class DataMatcher:
             print(f"Error preparing DataFrame: {str(e)}")
             return pd.DataFrame({'Error': [f'Error preparing data: {str(e)}']})
 
+    def _create_zip_file(self, files_to_zip: List[Tuple[str, str]]) -> str:
+        """Create a zip file with validation."""
+        zip_file = tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix='.zip',
+            prefix='matching_results_'
+        ).name
+
+        try:
+            # Create zip file
+            with zipfile.ZipFile(zip_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for file_path, arcname in files_to_zip:
+                    if os.path.exists(file_path):
+                        zipf.write(file_path, arcname)
+
+            # Verify zip file
+            with zipfile.ZipFile(zip_file, 'r') as zipf:
+                # Test zip file integrity
+                if zipf.testzip() is not None:
+                    raise Exception("Zip file verification failed")
+                
+                # Verify all files are in the zip
+                zip_contents = set(zipf.namelist())
+                expected_contents = set(arcname for _, arcname in files_to_zip)
+                if zip_contents != expected_contents:
+                    raise Exception("Zip file contents mismatch")
+
+            return zip_file
+
+        except Exception as e:
+            print(f"Error creating zip file: {str(e)}")
+            if os.path.exists(zip_file):
+                try:
+                    os.remove(zip_file)
+                except:
+                    pass
+            raise
+
     def find_matches(self, file_paths: List[str], target_columns: List[str]) -> str:
         """Find matching data across multiple Excel files for specific columns."""
         if len(file_paths) < 2:
@@ -195,88 +234,142 @@ class DataMatcher:
         print(f"Processing {len(file_paths)} files for matching data...")
         print(f"Target columns: {', '.join(target_columns)}")
         
-        # Create a temporary file for results
+        # Create temporary files for results
         result_file = tempfile.NamedTemporaryFile(
             delete=False,
             suffix='.xlsx',
             prefix='matching_data_'
         ).name
+        
+        clean_data_file = tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix='.xlsx',
+            prefix='clean_matching_data_'
+        ).name
 
         try:
-            # Create Excel writer with xlsxwriter engine
-            with pd.ExcelWriter(result_file, engine='xlsxwriter') as writer:
-                summary_data = []
-                
-                # Compare each pair of files
-                for i, file1 in enumerate(file_paths):
-                    for j, file2 in enumerate(file_paths[i+1:], i+1):
-                        try:
-                            print(f"\nComparing {os.path.basename(file1)} with {os.path.basename(file2)}")
-                            
-                            # Read files
-                            df1 = self._read_excel_file(file1)
-                            df2 = self._read_excel_file(file2)
-                            
-                            print(f"File 1 columns: {', '.join(df1.columns)}")
-                            print(f"File 2 columns: {', '.join(df2.columns)}")
-                            
-                            # Find matching columns from target columns
-                            matching_columns = self._find_matching_columns(df1, df2, target_columns)
-                            
-                            if matching_columns:
-                                print(f"\nFound {len(matching_columns)} matching column pairs:")
-                                for col1, col2 in matching_columns:
-                                    print(f"- '{col1}' matches '{col2}'")
-                                
-                                # Find matching rows
-                                matches = self._find_matching_rows(df1, df2, matching_columns)
-                                
-                                if not matches.empty:
-                                    # Create sheet name
-                                    sheet_name = f"Matches_{i+1}_{j+1}"
-                                    
-                                    # Prepare and write matches
-                                    matches_clean = self._prepare_dataframe_for_excel(matches)
-                                    matches_clean.to_excel(writer, sheet_name=sheet_name, index=False)
-                                    
-                                    # Add to summary
-                                    summary_data.append({
-                                        'File 1': os.path.basename(file1),
-                                        'File 2': os.path.basename(file2),
-                                        'Matching Columns': len(matching_columns),
-                                        'Matching Rows': len(matches),
-                                        'Sheet Name': sheet_name
-                                    })
-                                    
-                                    print(f"Found {len(matches)} matching rows")
-                                else:
-                                    print("No matching rows found")
-                            else:
-                                print("No matching columns found")
-                                
-                        except Exception as e:
-                            print(f"Error processing files {file1} and {file2}: {str(e)}")
-                            continue
+            # Store all matches and clean matches
+            all_matches = []
+            all_clean_matches = []
+            summary_data = []
+            
+            # Compare each pair of files
+            for i, file1 in enumerate(file_paths):
+                for j, file2 in enumerate(file_paths[i+1:], i+1):
+                    try:
+                        print(f"\nComparing {os.path.basename(file1)} with {os.path.basename(file2)}")
                         
-                        # Clear memory
-                        gc.collect()
-                
-                # Write summary sheet
-                if summary_data:
-                    summary_df = pd.DataFrame(summary_data)
-                    summary_df = self._prepare_dataframe_for_excel(summary_df)
-                else:
-                    summary_df = pd.DataFrame({'Message': ['No matches found between any files']})
-                
-                summary_df.to_excel(writer, sheet_name='Summary', index=False)
+                        # Read files
+                        df1 = self._read_excel_file(file1)
+                        df2 = self._read_excel_file(file2)
+                        
+                        print(f"File 1 columns: {', '.join(df1.columns)}")
+                        print(f"File 2 columns: {', '.join(df2.columns)}")
+                        
+                        # Find matching columns from target columns
+                        matching_columns = self._find_matching_columns(df1, df2, target_columns)
+                        
+                        if matching_columns:
+                            print(f"\nFound {len(matching_columns)} matching column pairs:")
+                            for col1, col2 in matching_columns:
+                                print(f"- '{col1}' matches '{col2}'")
+                            
+                            # Find matching rows
+                            matches = self._find_matching_rows(df1, df2, matching_columns)
+                            
+                            if not matches.empty:
+                                # Add source information
+                                matches['Source_File1'] = os.path.basename(file1)
+                                matches['Source_File2'] = os.path.basename(file2)
+                                
+                                # Store matches
+                                all_matches.append(matches)
+                                
+                                # Create clean version of matches
+                                clean_matches = matches.copy()
+                                metadata_columns = ['Match_Type', 'Matched_Column_File1', 'Matched_Column_File2', 'Similarity']
+                                clean_matches = clean_matches.drop(columns=[col for col in metadata_columns if col in clean_matches.columns])
+                                all_clean_matches.append(clean_matches)
+                                
+                                # Add to summary
+                                summary_data.append({
+                                    'File 1': os.path.basename(file1),
+                                    'File 2': os.path.basename(file2),
+                                    'Matching Columns': len(matching_columns),
+                                    'Matching Rows': len(matches),
+                                    'Sheet Name': f"Matches_{i+1}_{j+1}"
+                                })
+                                
+                                print(f"Found {len(matches)} matching rows")
+                            else:
+                                print("No matching rows found")
+                        else:
+                            print("No matching columns found")
+                            
+                    except Exception as e:
+                        print(f"Error processing files {file1} and {file2}: {str(e)}")
+                        continue
+                    
+                    # Clear memory
+                    gc.collect()
+            
+            # Write all matches to a single Excel file
+            try:
+                with pd.ExcelWriter(result_file, engine='xlsxwriter') as writer:
+                    # Write summary sheet
+                    if summary_data:
+                        summary_df = pd.DataFrame(summary_data)
+                        summary_df = self._prepare_dataframe_for_excel(summary_df)
+                    else:
+                        summary_df = pd.DataFrame({'Message': ['No matches found between any files']})
+                    
+                    summary_df.to_excel(writer, sheet_name='Summary', index=False)
+                    
+                    # Write all matches to a single sheet
+                    if all_matches:
+                        combined_matches = pd.concat(all_matches, ignore_index=True)
+                        combined_matches = self._prepare_dataframe_for_excel(combined_matches)
+                        combined_matches.to_excel(writer, sheet_name='All_Matches', index=False)
+            except Exception as e:
+                raise Exception(f"Error writing matches file: {str(e)}")
 
-            return result_file
+            # Write clean data to a separate Excel file
+            try:
+                with pd.ExcelWriter(clean_data_file, engine='xlsxwriter') as writer:
+                    if all_clean_matches:
+                        combined_clean_matches = pd.concat(all_clean_matches, ignore_index=True)
+                        combined_clean_matches = self._prepare_dataframe_for_excel(combined_clean_matches)
+                        combined_clean_matches.to_excel(writer, sheet_name='Clean_Matching_Data', index=False)
+                    else:
+                        pd.DataFrame({'Message': ['No matches found between any files']}).to_excel(
+                            writer, sheet_name='Clean_Matching_Data', index=False
+                        )
+            except Exception as e:
+                raise Exception(f"Error writing clean data file: {str(e)}")
+
+            # Create zip file with both Excel files
+            zip_file = self._create_zip_file([
+                (result_file, os.path.basename(result_file)),
+                (clean_data_file, os.path.basename(clean_data_file))
+            ])
+
+            # Clean up temporary files
+            try:
+                if os.path.exists(result_file):
+                    os.remove(result_file)
+                if os.path.exists(clean_data_file):
+                    os.remove(clean_data_file)
+            except:
+                pass
+
+            return zip_file
 
         except Exception as e:
-            print(f"Error in Excel writing process: {str(e)}")
-            if os.path.exists(result_file):
+            # Clean up temporary files in case of error
+            for temp_file in [result_file, clean_data_file]:
                 try:
-                    os.remove(result_file)
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
                 except:
                     pass
-            raise Exception(f"Error generating Excel file: {str(e)}") 
+            raise Exception(f"Error generating Excel files: {str(e)}") 
