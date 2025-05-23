@@ -7,6 +7,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 import gc
 import zipfile
+import time
 
 class DataMatcher:
     def __init__(self, similarity_threshold: float = 0.7):
@@ -187,18 +188,20 @@ class DataMatcher:
 
     def _create_zip_file(self, files_to_zip: List[Tuple[str, str]]) -> str:
         """Create a zip file with validation."""
-        zip_file = tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix='.zip',
-            prefix='matching_results_'
-        ).name
-
+        # Create zip file in the current working directory instead of temp directory
+        zip_file = os.path.join(os.getcwd(), 'matching_results.zip')
+        
+        print(f"\nCreating zip file at: {zip_file}")
+        
         try:
             # Create zip file
             with zipfile.ZipFile(zip_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for file_path, arcname in files_to_zip:
                     if os.path.exists(file_path):
+                        print(f"Adding file to zip: {file_path}")
                         zipf.write(file_path, arcname)
+                    else:
+                        print(f"Warning: File not found: {file_path}")
 
             # Verify zip file
             with zipfile.ZipFile(zip_file, 'r') as zipf:
@@ -210,8 +213,9 @@ class DataMatcher:
                 zip_contents = set(zipf.namelist())
                 expected_contents = set(arcname for _, arcname in files_to_zip)
                 if zip_contents != expected_contents:
-                    raise Exception("Zip file contents mismatch")
+                    raise Exception(f"Zip file contents mismatch. Expected: {expected_contents}, Got: {zip_contents}")
 
+            print(f"Successfully created zip file: {zip_file}")
             return zip_file
 
         except Exception as e:
@@ -234,18 +238,13 @@ class DataMatcher:
         print(f"Processing {len(file_paths)} files for matching data...")
         print(f"Target columns: {', '.join(target_columns)}")
         
-        # Create temporary files for results
-        result_file = tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix='.xlsx',
-            prefix='matching_data_'
-        ).name
+        # Create temporary files for results in the current working directory
+        result_file = os.path.join(os.getcwd(), 'matching_data.xlsx')
+        clean_data_file = os.path.join(os.getcwd(), 'clean_matching_data.xlsx')
         
-        clean_data_file = tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix='.xlsx',
-            prefix='clean_matching_data_'
-        ).name
+        print(f"\nWill save results to:")
+        print(f"- Main results file: {result_file}")
+        print(f"- Clean data file: {clean_data_file}")
 
         try:
             # Store all matches and clean matches
@@ -330,6 +329,7 @@ class DataMatcher:
                         combined_matches = pd.concat(all_matches, ignore_index=True)
                         combined_matches = self._prepare_dataframe_for_excel(combined_matches)
                         combined_matches.to_excel(writer, sheet_name='All_Matches', index=False)
+                print(f"Successfully wrote results to: {result_file}")
             except Exception as e:
                 raise Exception(f"Error writing matches file: {str(e)}")
 
@@ -344,23 +344,30 @@ class DataMatcher:
                         pd.DataFrame({'Message': ['No matches found between any files']}).to_excel(
                             writer, sheet_name='Clean_Matching_Data', index=False
                         )
+                print(f"Successfully wrote clean data to: {clean_data_file}")
             except Exception as e:
                 raise Exception(f"Error writing clean data file: {str(e)}")
 
-            # Create zip file with both Excel files
+            # Ensure files are closed before zipping
+            time.sleep(0.5)  # Give the OS a moment to flush file handles
+
+            # Double-check files exist and are not empty
+            for f in [result_file, clean_data_file]:
+                if not os.path.exists(f) or os.path.getsize(f) == 0:
+                    raise Exception(f"File {f} does not exist or is empty before zipping!")
+
+            # Now create the zip file
             zip_file = self._create_zip_file([
-                (result_file, os.path.basename(result_file)),
-                (clean_data_file, os.path.basename(clean_data_file))
+                (result_file, 'matching_data.xlsx'),
+                (clean_data_file, 'clean_matching_data.xlsx')
             ])
 
-            # Clean up temporary files
-            try:
-                if os.path.exists(result_file):
-                    os.remove(result_file)
-                if os.path.exists(clean_data_file):
-                    os.remove(clean_data_file)
-            except:
-                pass
+            print(f"\nProcess completed successfully!")
+            print(f"Results are available in:")
+            print(f"1. Individual Excel files:")
+            print(f"   - {result_file}")
+            print(f"   - {clean_data_file}")
+            print(f"2. Combined zip file: {zip_file}")
 
             return zip_file
 
