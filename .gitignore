@@ -20,6 +20,9 @@ var/
 .installed.cfg
 *.egg
 build/
+data_matcher.cpython-310.pyc
+excel_comparator.cpython-310.pyc
+prompt_generator.cpython-310.pyc
 
 # Virtual Environment
 venv/
