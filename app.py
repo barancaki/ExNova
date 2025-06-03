@@ -20,7 +20,7 @@ load_dotenv()
 
 app = Flask(__name__, static_folder='static')
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # Increased to 100MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
 
 # Initialize Gemini
 genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))

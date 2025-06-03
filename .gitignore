@@ -1,1 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+build/
+data_matcher.cpython-310.pyc
+excel_comparator.cpython-310.pyc
+prompt_generator.cpython-310.pyc
+
+# Virtual Environment
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment variables
 .env
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Application specific
+uploads/
+*.log

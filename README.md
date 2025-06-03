@@ -1,4 +1,4 @@
-# Excel AI Tool
+# ExNova Excel AI Tool
 
 A powerful Flask-based web application that provides advanced Excel file processing capabilities with AI integration using Google's Gemini Pro model.
 
@@ -186,9 +186,9 @@ The application automatically handles rate limits by:
    - Check system resources
    - Review log files for bottlenecks
 
-## Contributing
+## Created By Baran Çakı
 
-Contributions are welcome! Please feel free to submit a Pull Request. When contributing, please:
+
 
 1. Follow the existing code style
 2. Add tests for new features
