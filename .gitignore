@@ -44,3 +44,6 @@ docker-compose.override.yml
 # Application specific
 uploads/
 *.log
+__pycache__/data_matcher.cpython-310.pyc
+__pycache__/excel_comparator.cpython-310.pyc
+__pycache__/prompt_generator.cpython-310.pyc
